@@ -21,7 +21,7 @@ def load_and_prepare_data(file1, file2):
     df1['TransactionDateTime'] = pd.to_datetime(df1['Transaction Date'].astype(str) + ' ' + df1['Transaction Time'].astype(str))
 
     # Convert 'Transaction Date' and 'Transaction Time' to datetime format for df2
-    df2['Transaction Date'] = pd.to_datetime(df2['TransactionDate'], format='%d/%m/%Y')
+    df2['Transaction Date'] = pd.to_datetime(df2['TransactionDate'], format='%d/%m/%y')
     df2['Transaction Time'] = pd.to_datetime(df2['TransactionTime'], format='%H:%M:%S').dt.time
     df2['TransactionDateTime'] = pd.to_datetime(df2['Transaction Date'].astype(str) + ' ' + df2['Transaction Time'].astype(str))
 
