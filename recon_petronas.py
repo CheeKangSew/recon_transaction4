@@ -15,15 +15,20 @@ def load_and_prepare_data(file1, file2):
     df2 = pd.read_csv(file2)
 
     # Convert 'Transaction Date' and 'Transaction Time' to datetime format for df1
-    df1['Date Time'] = pd.to_datetime(df1['Date Time'], format='%d/%m/%Y %H:%M')
+    df1['Date Time'] = pd.to_datetime(df1['Date Time'], format='%d/%m/%Y %H:%M', errors='coerce')
+    # Drop rows with NaT in 'Date Time'
+    df1 = df1.dropna(subset=['Date Time])
+    
     df1['Transaction Date'] = df1['Date Time'].dt.date
     df1['Transaction Time'] = df1['Date Time'].dt.time
-    df1['TransactionDateTime'] = pd.to_datetime(df1['Transaction Date'].astype(str) + ' ' + df1['Transaction Time'].astype(str))
+    df1['TransactionDateTime'] = pd.to_datetime(df1['Transaction Date'].astype(str) + ' ' + df1['Transaction Time'].astype(str), errors='coerce')
 
     # Convert 'Transaction Date' and 'Transaction Time' to datetime format for df2 with update
-    df2['Transaction Date'] = pd.to_datetime(df2['TransactionDate'], format='%d/%m/%Y')
-    df2['Transaction Time'] = pd.to_datetime(df2['TransactionTime'], format='%H:%M:%S').dt.time
-    df2['TransactionDateTime'] = pd.to_datetime(df2['Transaction Date'].astype(str) + ' ' + df2['Transaction Time'].astype(str))
+    df2['Transaction Date'] = pd.to_datetime(df2['TransactionDate'], format='%d/%m/%Y', errors='coerce')
+    df2['Transaction Time'] = pd.to_datetime(df2['TransactionTime'], format='%H:%M:%S', errors='coerce').dt.time
+    # Handle invalid or missing values
+    df2 = df2.dropna(subset=['Transaction Date', 'Transaction Time'])
+    df2['TransactionDateTime'] = pd.to_datetime(df2['Transaction Date'].astype(str) + ' ' + df2['Transaction Time'].astype(str), erros='coerce')
 
     # Convert numeric columns to float
     df1['Transaction Amount (RM)'] = pd.to_numeric(df1['Transaction Amount (RM)'], errors='coerce')
