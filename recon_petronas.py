@@ -17,7 +17,7 @@ def load_and_prepare_data(file1, file2):
     # Convert 'Transaction Date' and 'Transaction Time' to datetime format for df1
     df1['Date Time'] = pd.to_datetime(df1['Date Time'], format='%d/%m/%Y %H:%M', errors='coerce')
     # Drop rows with NaT in 'Date Time'
-    df1 = df1.dropna(subset=['Date Time])
+    df1 = df1.dropna(subset=['Date Time'])
     
     df1['Transaction Date'] = df1['Date Time'].dt.date
     df1['Transaction Time'] = df1['Date Time'].dt.time
