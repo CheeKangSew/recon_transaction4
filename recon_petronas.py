@@ -126,6 +126,38 @@ def find_mismatch_reasons(df1_filtered, df2_filtered, matched_transactions, time
     
     return mismatched_transactions
 
+def add_matched_and_mismatch_to_file2(df1_filtered, df2_filtered, matched_transactions, mismatched_transactions):
+    # Add 'Matched' column to df2
+    df2_filtered['Matched'] = df2_filtered.apply(
+        lambda row: any(
+            (matched_transactions['TransactionDateTime'] == row['TransactionDateTime']) &
+            (matched_transactions['VehicleNumber2'] == row['VehicleNumber2']) &
+            (matched_transactions['Amount2'] == row['Amount2'])
+        ),
+        axis=1
+    )
+
+    # Add 'Mismatch Reason' column to df2
+    df2_filtered['MismatchReason'] = ''
+    for index, row in mismatched_transactions.iterrows():
+        df2_filtered.loc[
+            (df2_filtered['TransactionDateTime'] == row['TransactionDateTime']) &
+            (df2_filtered['VehicleNumber2'] == row['VehicleNumber1']),
+            'MismatchReason'
+        ] = row['MismatchReason']
+
+    # Add 'Transaction Amount (RM)' from df1 to matched rows in df2
+    df2_filtered['Transaction Amount (RM)'] = df2_filtered.apply(
+        lambda row: matched_transactions.loc[
+            (matched_transactions['TransactionDateTime'] == row['TransactionDateTime']) &
+            (matched_transactions['VehicleNumber2'] == row['VehicleNumber2']),
+            'Amount1'
+        ].values[0] if row['Matched'] else None,
+        axis=1
+    )
+
+    return df2_filtered
+
 def main():
     st.title("Petronas Transaction Matching Application")
 
@@ -157,6 +189,14 @@ def main():
         
         # Find and display mismatched transactions with reasons
         mismatched_transactions = find_mismatch_reasons(df1_filtered, df2_filtered, matched_transactions, time_buffer_hours)
+
+         # Add matched and mismatch columns to df2
+        df2_with_details = add_matched_and_mismatch_to_file2(df1_filtered, df2_filtered, matched_transactions, mismatched_transactions)
+
+        # Display the second file with appended columns
+        st.subheader("Soliduz File with Matched and Mismatch Columns")
+        st.dataframe(df2_with_details)
+
         
         # Combine matched and mismatched transactions into the original DataFrame
         df1_with_matched['MismatchReason'] = ''
@@ -181,6 +221,13 @@ def main():
             label="Download Petronas File with Matched Column and Mismatch Reasons",
             data=df1_with_matched.to_csv(index=False).encode('utf-8'),
             file_name='TransactionListing_with_matched_and_reasons.csv',
+            mime='text/csv'
+        )
+
+        st.download_button(
+            label="Download Soliduz File with Matched and Mismatch Columns",
+            data=df2_with_details.to_csv(index=False).encode('utf-8'),
+            file_name='Soliduz_with_matched_and_reasons.csv',
             mime='text/csv'
         )
 
