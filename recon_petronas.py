@@ -28,7 +28,7 @@ def load_and_prepare_data(file1, file2):
     df2['Transaction Time'] = pd.to_datetime(df2['TransactionTime'], format='%H:%M:%S', errors='coerce').dt.time
     # Handle invalid or missing values
     df2 = df2.dropna(subset=['Transaction Date', 'Transaction Time'])
-    df2['TransactionDateTime'] = pd.to_datetime(df2['Transaction Date'].astype(str) + ' ' + df2['Transaction Time'].astype(str), erros='coerce')
+    df2['TransactionDateTime'] = pd.to_datetime(df2['Transaction Date'].astype(str) + ' ' + df2['Transaction Time'].astype(str), errors='coerce')
 
     # Convert numeric columns to float
     df1['Transaction Amount (RM)'] = pd.to_numeric(df1['Transaction Amount (RM)'], errors='coerce')
