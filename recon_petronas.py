@@ -15,7 +15,7 @@ def load_and_prepare_data(file1, file2):
     df2 = pd.read_csv(file2)
 
     # Convert 'Transaction Date' and 'Transaction Time' to datetime format for df1
-    df1['Date Time'] = pd.to_datetime(df1['Date Time'], format='%d/%m/%Y %H:%M')
+    df1['Date Time'] = pd.to_datetime(df1['Date Time'], format='%d/%m/%y %H:%M')
     df1['Transaction Date'] = df1['Date Time'].dt.date
     df1['Transaction Time'] = df1['Date Time'].dt.time
     df1['TransactionDateTime'] = pd.to_datetime(df1['Transaction Date'].astype(str) + ' ' + df1['Transaction Time'].astype(str))
