@@ -144,7 +144,7 @@ def main():
 
         total_transactions_file1, total_transactions_file2, total_matched_transactions = count_transactions(df1_filtered, df2_filtered, matched_transactions)
         
-        st.write(f"Total transactions in Shell file: {total_transactions_file1}")
+        st.write(f"Total transactions in Petronas file: {total_transactions_file1}")
         st.write(f"Total transactions in Soliduz file: {total_transactions_file2}")
         st.write(f"Total matched transactions: {total_matched_transactions}")
 
