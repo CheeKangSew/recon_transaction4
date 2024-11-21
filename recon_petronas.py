@@ -8,56 +8,69 @@ Created on Mon Aug 19 16:41:22 2024
 import streamlit as st
 import pandas as pd
 from io import StringIO
+import os
 
 def load_and_prepare_data(file1, file2):
     # Load the two CSV files
     df1 = pd.read_csv(file1)
+    # df1 = pd.read_excel(file1)
     df2 = pd.read_csv(file2)
+    # df2 = pd.read_excel(file2)
 
-    # Convert 'Transaction Date' and 'Transaction Time' to datetime format for df1
-    df1['Date Time'] = pd.to_datetime(df1['Date Time'], format='%d/%m/%Y %H:%M', errors='coerce')
+    # Convert 'Transaction Date' and 'Transaction Time' to datetime format for df2
+    df2['Date Time'] = pd.to_datetime(df2['Date Time'], format='%d/%m/%Y %H:%M', errors='coerce')
     # Drop rows with NaT in 'Date Time'
-    df1 = df1.dropna(subset=['Date Time'])
+    df2 = df2.dropna(subset=['Date Time'])
+    df2['Transaction Date'] = df2['Date Time'].dt.date
+    df2['Transaction Time'] = df2['Date Time'].dt.time
+    df2['TransactionDateTime'] = pd.to_datetime(df2['Transaction Date'].astype(str) + ' ' + df2['Transaction Time'].astype(str), errors='coerce')
     
-    df1['Transaction Date'] = df1['Date Time'].dt.date
-    df1['Transaction Time'] = df1['Date Time'].dt.time
+    
+    # Convert 'Transaction Date' and 'Transaction Time' to datetime format for df1
+    df1['Transaction Date'] = pd.to_datetime(df1['TransactionDate'], format='%d/%m/%Y', errors='coerce')
+    df1['Transaction Time'] = pd.to_datetime(df1['TransactionTime'], format='%H:%M:%S', errors='coerce').dt.time
+    df1 = df1.dropna(subset=['Transaction Date', 'Transaction Time'])
     df1['TransactionDateTime'] = pd.to_datetime(df1['Transaction Date'].astype(str) + ' ' + df1['Transaction Time'].astype(str), errors='coerce')
 
-    # Convert 'Transaction Date' and 'Transaction Time' to datetime format for df2 with update
-    df2['Transaction Date'] = pd.to_datetime(df2['TransactionDate'], format='%d/%m/%Y', errors='coerce')
-    df2['Transaction Time'] = pd.to_datetime(df2['TransactionTime'], format='%H:%M:%S', errors='coerce').dt.time
-    # Handle invalid or missing values
-    df2 = df2.dropna(subset=['Transaction Date', 'Transaction Time'])
-    df2['TransactionDateTime'] = pd.to_datetime(df2['Transaction Date'].astype(str) + ' ' + df2['Transaction Time'].astype(str), errors='coerce')
-
     # Convert numeric columns to float
-    df1['Transaction Amount (RM)'] = pd.to_numeric(df1['Transaction Amount (RM)'], errors='coerce')
-    df2['TotalAmount'] = pd.to_numeric(df2['TotalAmount'], errors='coerce')
+    df2['Transaction Amount (RM)'] = pd.to_numeric(df2['Transaction Amount (RM)'], errors='coerce')
+    df1['TotalAmount'] = pd.to_numeric(df1['TotalAmount'], errors='coerce')
+
+    # Remove spaces in 'Vehicle License Number' and store in 'VehicleNumber1'
+    df2['Vehicle Number'] = df2['Vehicle Number'].str.replace(r'\s+', '', regex=True)
+    df2['VehicleNumber2'] = df2['Vehicle Number'].str.replace(r'\s+', '', regex=True)
+
+    # Remove spaces in 'VehicleRegistrationNo' and store in 'VehicleNumber2'
+    df1['VehicleNumber1'] = df1['VehicleRegistrationNo'].str.replace(r'\s+', '', regex=True)
+    
+    # Ensure 'Receipt Number' is treated as a string (prevent numeric conversion)
+    # df2['Receipt Number'] = df2['Receipt Number'].astype(str)
 
     # Filter necessary columns for matching
-    df1_filtered = df1[['TransactionDateTime', 'Transaction Amount (RM)', 'Vehicle Number']]
-    df2_filtered = df2[['TransactionDateTime', 'TotalAmount', 'VehicleRegistrationNo']]
+    df2_filtered = df2[['TransactionDateTime', 'Transaction Amount (RM)', 'VehicleNumber2', 'Station Name']]
+    df1_filtered = df1[['TransactionDateTime', 'TotalAmount', 'VehicleNumber1', 'PetrolStationName']]
 
     # Rename columns for clarity
-    df1_filtered.rename(columns={'Transaction Amount (RM)': 'Amount1', 'Vehicle Number': 'VehicleNumber1'}, inplace=True)
-    df2_filtered.rename(columns={'TotalAmount': 'Amount2', 'VehicleRegistrationNo': 'VehicleNumber2'}, inplace=True)
-    
+    df2_filtered.rename(columns={'Transaction Amount (RM)': 'Amount2', 'Vehicle Number': 'VehicleNumber2'}, inplace=True)
+    df1_filtered.rename(columns={'TotalAmount': 'Amount1', 'VehicleRegistrationNo': 'VehicleNumber1'}, inplace=True)
+
     return df1, df1_filtered, df2_filtered
 
 def match_transactions(df1_filtered, df2_filtered, time_buffer_hours=1):
     # Create an empty DataFrame to store matched transactions
-    matched_transactions = pd.DataFrame(columns=['TransactionDateTime', 'Amount1', 'VehicleNumber1', 'Amount2', 'VehicleNumber2'])
+    matched_transactions = pd.DataFrame(columns=['TransactionDateTime', 'Amount1', 'VehicleNumber1', 'PetrolStationName', 'Amount2', 'VehicleNumber2', 'Station Name'])
 
     # Create time buffer
     time_buffer = pd.Timedelta(hours=time_buffer_hours)
 
     # Loop through each row in the first DataFrame
     for index1, row1 in df1_filtered.iterrows():
-        # Find rows in the second DataFrame that match the vehicle number and time buffer
+        # Find rows in the second DataFrame that match the vehicle number, site name, and time buffer
         df2_time_match = df2_filtered[
             (df2_filtered['VehicleNumber2'] == row1['VehicleNumber1']) &
             (df2_filtered['TransactionDateTime'] >= (row1['TransactionDateTime'] - time_buffer)) &
             (df2_filtered['TransactionDateTime'] <= (row1['TransactionDateTime'] + time_buffer)) &
+            (df2_filtered['Station Name'] == row1['PetrolStationName']) &
             (abs(df2_filtered['Amount2'] - row1['Amount1']) < 0.01)  # Allow for minor differences in amounts
         ]
 
@@ -67,11 +80,13 @@ def match_transactions(df1_filtered, df2_filtered, time_buffer_hours=1):
                 'TransactionDateTime': [row1['TransactionDateTime']],
                 'Amount1': [row1['Amount1']],
                 'VehicleNumber1': [row1['VehicleNumber1']],
+                'PetrolStationName': [row1['PetrolStationName']],
                 'Amount2': [row2['Amount2']],
-                'VehicleNumber2': [row2['VehicleNumber2']]
+                'VehicleNumber2': [row2['VehicleNumber2']],
+                'Station Name': [row2['Station Name']]
             })
             matched_transactions = pd.concat([matched_transactions, new_match], ignore_index=True)
-    
+
     return matched_transactions
 
 def count_transactions(df1_filtered, df2_filtered, matched_transactions):
@@ -82,14 +97,18 @@ def count_transactions(df1_filtered, df2_filtered, matched_transactions):
     return total_transactions_file1, total_transactions_file2, total_matched_transactions
 
 def add_matched_column(df1, matched_transactions):
-    # Create a new column in df1 to indicate whether the transaction is matched
+    # Create a new column in df2 to indicate whether the transaction is matched and add TransactionNo where applicable
     df1['Matched'] = df1.apply(
         lambda row: any(
             (matched_transactions['TransactionDateTime'] == row['TransactionDateTime']) &
-            (matched_transactions['Amount1'] == row['Transaction Amount (RM)']) &
-            (matched_transactions['VehicleNumber1'] == row['Vehicle Number'])
+            (matched_transactions['Amount1'] == row['TotalAmount']) &
+            (matched_transactions['VehicleNumber1'] == row['VehicleRegistrationNo']) &
+            (matched_transactions['PetrolStationName'] == row['PetrolStationName'])
         ), axis=1
     )
+    
+    # Append TransactionNo from matched_transactions to df2 where matched
+
     
     return df1
 
@@ -116,8 +135,14 @@ def find_mismatch_reasons(df1_filtered, df2_filtered, matched_transactions, time
             mismatched_transactions.at[index1, 'MismatchReason'] = 'Time Mismatch'
             continue
         
+        # Check for site name mismatch
+        df2_site_match = df2_time_match[df2_time_match['Station Name'] == row1['PetrolStationName']]
+        if df2_site_match.empty:
+            mismatched_transactions.at[index1, 'MismatchReason'] = 'Site Name Mismatch'
+            continue
+        
         # Check for amount mismatch
-        df2_amount_match = df2_time_match[abs(df2_time_match['Amount2'] - row1['Amount1']) < 0.01]
+        df2_amount_match = df2_site_match[abs(df2_site_match['Amount2'] - row1['Amount1']) < 0.01]
         if df2_amount_match.empty:
             mismatched_transactions.at[index1, 'MismatchReason'] = 'Amount Mismatch'
     
@@ -126,44 +151,14 @@ def find_mismatch_reasons(df1_filtered, df2_filtered, matched_transactions, time
     
     return mismatched_transactions
 
-def add_matched_and_mismatch_to_file2(df1_filtered, df2_filtered, matched_transactions, mismatched_transactions):
-    # Add 'Matched' column to df2
-    df2_filtered['Matched'] = df2_filtered.apply(
-        lambda row: any(
-            (matched_transactions['TransactionDateTime'] == row['TransactionDateTime']) &
-            (matched_transactions['VehicleNumber2'] == row['VehicleNumber2']) &
-            (matched_transactions['Amount2'] == row['Amount2'])
-        ),
-        axis=1
-    )
-
-    # Add 'Mismatch Reason' column to df2
-    df2_filtered['MismatchReason'] = ''
-    for index, row in mismatched_transactions.iterrows():
-        df2_filtered.loc[
-            (df2_filtered['TransactionDateTime'] == row['TransactionDateTime']) &
-            (df2_filtered['VehicleNumber2'] == row['VehicleNumber1']),
-            'MismatchReason'
-        ] = row['MismatchReason']
-
-    # Add 'Transaction Amount (RM)' from df1 to matched rows in df2
-    df2_filtered['Transaction Amount (RM)'] = df2_filtered.apply(
-        lambda row: matched_transactions.loc[
-            (matched_transactions['TransactionDateTime'] == row['TransactionDateTime']) &
-            (matched_transactions['VehicleNumber2'] == row['VehicleNumber2']),
-            'Amount1'
-        ].values[0] if row['Matched'] else None,
-        axis=1
-    )
-
-    return df2_filtered
-
 def main():
-    st.title("Petronas Transaction Matching Application")
+    st.title("Soliduz & Petronas Transaction Matching Application")
 
     # Upload files
-    file1 = st.file_uploader("Upload the fleetcard CSV file from Petronas", type="csv")
-    file2 = st.file_uploader("Upload the transaction CSV file from Soliduz", type="csv")
+    # file1 = st.file_uploader("Upload the Soliduz file in excel", type="csv")
+    file1 = st.file_uploader("Upload the Soliduz file in CSV format", type=["csv", "xlsx", "xls"])
+    # file2 = st.file_uploader("Upload the Shell file in excel", type="csv")
+    file2 = st.file_uploader("Upload the Petronas file in CSV format", type=["csv", "xlsx", "xls"])
 
     if file1 and file2:
         # Time buffer slider
@@ -176,11 +171,11 @@ def main():
 
         total_transactions_file1, total_transactions_file2, total_matched_transactions = count_transactions(df1_filtered, df2_filtered, matched_transactions)
         
-        st.write(f"Total transactions in Petronas file: {total_transactions_file1}")
-        st.write(f"Total transactions in Soliduz file: {total_transactions_file2}")
+        st.write(f"Total transactions in Soliduz file: {total_transactions_file1}")
+        st.write(f"Total transactions in Petronas file: {total_transactions_file2}")
         st.write(f"Total matched transactions: {total_matched_transactions}")
 
-        # Add matched column to df1
+        # Add matched column and TransactionNo to df2
         df1_with_matched = add_matched_column(df1, matched_transactions)
         
         # Display matched transactions
@@ -189,25 +184,22 @@ def main():
         
         # Find and display mismatched transactions with reasons
         mismatched_transactions = find_mismatch_reasons(df1_filtered, df2_filtered, matched_transactions, time_buffer_hours)
-
-         # Add matched and mismatch columns to df2
-        df2_with_details = add_matched_and_mismatch_to_file2(df1_filtered, df2_filtered, matched_transactions, mismatched_transactions)
-
-        # Display the second file with appended columns
-        st.subheader("Soliduz File with Matched and Mismatch Columns")
-        st.dataframe(df2_with_details)
-
         
         # Combine matched and mismatched transactions into the original DataFrame
         df1_with_matched['MismatchReason'] = ''
         for index, row in mismatched_transactions.iterrows():
             df1_with_matched.loc[(df1_with_matched['TransactionDateTime'] == row['TransactionDateTime']) &
-                                 (df1_with_matched['Transaction Amount (RM)'] == row['Amount1']) &
-                                 (df1_with_matched['Vehicle Number'] == row['VehicleNumber1']), 'MismatchReason'] = row['MismatchReason']
+                                 (df1_with_matched['TotalAmount'] == row['Amount1']) &
+                                 (df1_with_matched['VehicleRegistrationNo'] == row['VehicleNumber1']), 'MismatchReason'] = row['MismatchReason']
         
         # Display the first file with matched column and mismatch reasons
-        st.subheader("Petronas File with Matched Column and Mismatch Reasons")
+        st.subheader("Soliduz File with Transactions")
         st.dataframe(df1_with_matched)
+        
+        # Remove unnecessary columns for the downloadable file
+        # Fix for 'ReferenceReceiptNo' column (treating it as string)
+        # df1_with_matched['ReferenceReceiptNo'] = df1_with_matched['ReferenceReceiptNo'].astype(str)
+        df1_downloadable = df1_with_matched.drop(columns=['Transaction Date', 'Transaction Time', 'TransactionDateTime', 'VehicleNumber1'])
 
         # Download buttons
         st.download_button(
@@ -218,19 +210,11 @@ def main():
         )
 
         st.download_button(
-            label="Download Petronas File with Matched Column and Mismatch Reasons",
-            data=df1_with_matched.to_csv(index=False).encode('utf-8'),
+            label="Download Soliduz File with processed transaction",
+            data=df1_downloadable.to_csv(index=False).encode('utf-8'),
             file_name='TransactionListing_with_matched_and_reasons.csv',
-            mime='text/csv'
-        )
-
-        st.download_button(
-            label="Download Soliduz File with Matched and Mismatch Columns",
-            data=df2_with_details.to_csv(index=False).encode('utf-8'),
-            file_name='Soliduz_with_matched_and_reasons.csv',
             mime='text/csv'
         )
 
 if __name__ == "__main__":
     main()
-
